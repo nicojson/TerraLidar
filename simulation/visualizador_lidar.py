@@ -1,53 +1,80 @@
-import numpy as np
 from OpenGL.GL import *
+import numpy as np
+import random
 import ctypes
 
 class VisualizadorLidar:
+    MAX_PUNTOS_VISIBLES = 30000
+
     def __init__(self):
         self.puntos = []
-        self.vao_puntos = glGenVertexArrays(1)
-        self.vbo_puntos = glGenBuffers(1)
+        self.vao = glGenVertexArrays(1)
+        self.vbo = glGenBuffers(1)
+        self.capacidad_buffer = 0
+        
+        self.barrido_hits = []
+        self.barrido_origins = []
+        self.barrido_directions = []
 
-        self.vao_rayos = glGenVertexArrays(1)
-        self.vbo_rayos = glGenBuffers(1)
+    def actualizar(self, nuevos):
+        if nuevos:
+            self.puntos.extend(nuevos)
+            if len(self.puntos) > self.MAX_PUNTOS_VISIBLES:
+                self.puntos = self.puntos[-self.MAX_PUNTOS_VISIBLES:]
 
-    def actualizar_y_dibujar(self, nuevos_puntos, posicion_dron, loc_color, loc_tipo):
-        if nuevos_puntos:
-            self.puntos.extend(nuevos_puntos)
-            if len(self.puntos) > 70000:
-                self.puntos = self.puntos[-70000:]
+    def actualizar_barrido(self, hits, origins, directions):
+        self.barrido_hits = hits
+        self.barrido_origins = origins
+        self.barrido_directions = directions
 
-        if len(self.puntos) > 0:
-            glUniform1i(loc_tipo, 0)
-            glUniform3f(loc_color, 1.0, 0.0, 0.0)
+    def dibujar_puntos(self, loc_tipo, loc_color):
+        if not self.puntos:
+            return
+            
+        glUniform1i(loc_tipo, 0)
+        glUniform3f(loc_color, 1.0, 0.0, 0.0)
 
-            datos_puntos = np.array(self.puntos, dtype=np.float32).flatten()
-            glBindVertexArray(self.vao_puntos)
-            glBindBuffer(GL_ARRAY_BUFFER, self.vbo_puntos)
-            glBufferData(GL_ARRAY_BUFFER, datos_puntos.nbytes, datos_puntos, GL_DYNAMIC_DRAW)
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
-            glEnableVertexAttribArray(0)
+        datos = np.array(self.puntos, dtype=np.float32).flatten()
+        glBindVertexArray(self.vao)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+        
+        if len(datos) <= self.capacidad_buffer:
+            glBufferSubData(GL_ARRAY_BUFFER, 0, datos.nbytes, datos)
+        else:
+            glBufferData(GL_ARRAY_BUFFER, datos.nbytes, datos, GL_DYNAMIC_DRAW)
+            self.capacidad_buffer = len(datos)
+            
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        glPointSize(2.5)
+        glDrawArrays(GL_POINTS, 0, len(self.puntos))
 
-            glPointSize(2.5)
-            glDrawArrays(GL_POINTS, 0, len(self.puntos))
+    def dibujar_rayos_activos(self, pos_dron, nuevos_puntos):
+        if not nuevos_puntos:
+            return
+            
+        muestra = random.sample(nuevos_puntos, min(100, len(nuevos_puntos)))
+        glUseProgram(0)
+        glLineWidth(1.5)
+        glColor3f(1.0, 0.2, 0.0)
+        glBegin(GL_LINES)
+        for p in muestra:
+            glVertex3f(pos_dron[0], pos_dron[1] - 0.5, pos_dron[2])
+            glVertex3f(p[0], p[1], p[2])
+        glEnd()
+        glLineWidth(1.0)
 
-        if nuevos_puntos:
-            glUniform1i(loc_tipo, 1)
-            glUniform3f(loc_color, 1.0, 0.1, 0.1)
-
-            lineas = []
-            for p in nuevos_puntos:
-                lineas.extend([posicion_dron[0], posicion_dron[1], posicion_dron[2]])
-                lineas.extend([p[0], p[1], p[2]])
-
-            datos_lineas = np.array(lineas, dtype=np.float32)
-            glBindVertexArray(self.vao_rayos)
-            glBindBuffer(GL_ARRAY_BUFFER, self.vbo_rayos)
-            glBufferData(GL_ARRAY_BUFFER, datos_lineas.nbytes, datos_lineas, GL_DYNAMIC_DRAW)
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, ctypes.c_void_p(0))
-            glEnableVertexAttribArray(0)
-
-            glLineWidth(1.2)
-            glDrawArrays(GL_LINES, 0, len(nuevos_puntos) * 2)
-            glLineWidth(1.0)
-
+    def dibujar_barrido_rotatorio(self, pos_dron):
+        if not self.barrido_hits:
+            return
+            
+        glUseProgram(0)
+        glLineWidth(2.0)
+        glColor3f(0.0, 1.0, 1.0) 
+        glBegin(GL_LINES)
+        ox, oy, oz = pos_dron[0], pos_dron[1] - 0.5, pos_dron[2]
+        for hit in self.barrido_hits:
+            glVertex3f(ox, oy, oz)
+            glVertex3f(hit[0], hit[1], hit[2])
+        glEnd()
+        glLineWidth(1.0)

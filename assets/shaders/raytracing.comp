@@ -1,0 +1,86 @@
+#version 430
+layout(local_size_x = 256) in;
+
+struct Ray {
+    vec4 origin;
+    vec4 direction;
+};
+
+layout(std430, binding = 0) buffer Tris {
+    float triangle_data[];
+};
+
+layout(std430, binding = 1) buffer RaysIn {
+    Ray rays[];
+};
+
+struct HitResult {
+    vec3 position;
+    float hit;
+};
+
+layout(std430, binding = 2) buffer HitsOut {
+    HitResult hits[];
+};
+
+uniform int num_triangles;
+
+bool rayTriangleIntersect(vec3 orig, vec3 dir,
+                          vec3 v0, vec3 v1, vec3 v2,
+                          out float t, out vec3 hitPoint) {
+    const float EPS = 1e-6;
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 h = cross(dir, edge2);
+    float a = dot(edge1, h);
+    if (abs(a) < EPS) return false;
+    float f = 1.0 / a;
+    vec3 s = orig - v0;
+    float u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0) return false;
+    vec3 q = cross(s, edge1);
+    float v = f * dot(dir, q);
+    if (v < 0.0 || u + v > 1.0) return false;
+    t = f * dot(edge2, q);
+    if (t > EPS) {
+        hitPoint = orig + dir * t;
+        return true;
+    }
+    return false;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= rays.length()) return;
+
+    vec3 orig = rays[idx].origin.xyz;
+    vec3 dir = rays[idx].direction.xyz;
+
+    float bestT = 1e30;
+    vec3 bestHit = vec3(0.0);
+    bool found = false;
+
+    for (int i = 0; i < num_triangles; i++) {
+        int off = i * 9;
+        vec3 v0 = vec3(triangle_data[off], triangle_data[off+1], triangle_data[off+2]);
+        vec3 v1 = vec3(triangle_data[off+3], triangle_data[off+4], triangle_data[off+5]);
+        vec3 v2 = vec3(triangle_data[off+6], triangle_data[off+7], triangle_data[off+8]);
+
+        float t;
+        vec3 pt;
+        if (rayTriangleIntersect(orig, dir, v0, v1, v2, t, pt)) {
+            if (t < bestT) {
+                bestT = t;
+                bestHit = pt;
+                found = true;
+            }
+        }
+    }
+
+    if (found) {
+        hits[idx].position = bestHit;
+        hits[idx].hit = 1.0;
+    } else {
+        hits[idx].hit = 0.0;
+    }
+}

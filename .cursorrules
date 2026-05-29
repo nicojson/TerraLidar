@@ -1,0 +1,10 @@
+# TerraLidar AI Agent Rules
+
+Al asistir o escribir código para el proyecto TerraLidar, sigue estrictamente estas pautas:
+
+1. **Idioma y Nomenclatura**: El código (variables, funciones, clases) y los comentarios DEBEN estar en **Español**, siguiendo el estándar actual del proyecto (ej: `SimuladorTerraLidar`, `obtener_matriz_vista`, `procesar_inputs`).
+2. **Solo PyOpenGL Estándar**: NO utilices librerías de alto nivel sobre OpenGL (como ModernGL, Vispy, etc.). Usa la librería `PyOpenGL` estándar (`OpenGL.GL`, `OpenGL.GLUT`, etc.) directamente. El objetivo es implementar el pipeline gráfico de bajo nivel.
+3. **Compute Shaders**: Prioriza el uso de Compute Shaders para cálculos paralelos pesados, específicamente para procesar los datos de simulación LiDAR y las nubes de puntos.
+4. **NumPy para Matemáticas**: Usa `numpy` extensivamente para todas las operaciones matemáticas, de vectores y matrices.
+5. **Matplotlib**: Usa `matplotlib` para generar gráficos 2D, visualización de análisis de datos y diagramas resultantes de las simulaciones LiDAR.
+6. **Pygame / GLFW para Control**: Actualmente el proyecto usa `glfw` y `glut` para ventanas e input, no `pygame`. Si se requiere usar `pygame`, debe usarse ESTRICTAMENTE para la gestión de ventanas, capturar input del usuario y el bucle de eventos. NO uses las funciones de renderizado 2D/3D internas de pygame; todo el renderizado debe ser manejado por PyOpenGL.

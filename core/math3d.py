@@ -3,79 +3,43 @@ import numpy as np
 
 class M3D:
     @staticmethod
-    def perspectiva(fov_deg, aspect, zn, zf):
-        f = 1.0 / math.tan(math.radians(fov_deg) * 0.5)
-        m = np.zeros((4, 4), dtype=np.float32)
-        m[0, 0] = f / aspect
-        m[1, 1] = f
-        m[2, 2] = (zf + zn) / (zn - zf)
-        m[2, 3] = (2.0 * zf * zn) / (zn - zf)
-        m[3, 2] = -1.0
-        return m
+    def matriz_perspectiva(fov_grados, aspecto, z_near, z_far):
+        f = 1.0 / math.tan(math.radians(fov_grados) / 2.0)
+        matriz = np.zeros((4, 4), dtype=np.float32)
+        matriz[0, 0] = f / aspecto
+        matriz[1, 1] = f
+        matriz[2, 2] = (z_far + z_near) / (z_near - z_far)
+        matriz[2, 3] = (2.0 * z_far * z_near) / (z_near - z_far)
+        matriz[3, 2] = -1.0
+        return matriz
 
     @staticmethod
-    def look_at(eye, center, up):
-        def norm(v): n = np.linalg.norm(v); return v / n if n > 0 else v
-
-        f = norm(center - eye)
-        s = norm(np.cross(f, norm(up)))
+    def matriz_vista(posicion, objetivo, up_vector):
+        f = objetivo - posicion
+        norm_f = np.linalg.norm(f)
+        f = f / norm_f if norm_f > 0 else f
+        
+        s = np.cross(f, up_vector)
+        norm_s = np.linalg.norm(s)
+        s = s / norm_s if norm_s > 0 else s
+        
         u = np.cross(s, f)
-        m = np.eye(4, dtype=np.float32)
-        m[0, 0:3] = s
-        m[0, 3] = -np.dot(s, eye)
-        m[1, 0:3] = u
-        m[1, 3] = -np.dot(u, eye)
-        m[2, 0:3] = -f
-        m[2, 3] = np.dot(f, eye)
-        return m
+
+        matriz = np.eye(4, dtype=np.float32)
+        matriz[0, 0:3] = s
+        matriz[1, 0:3] = u
+        matriz[2, 0:3] = -f
+        matriz[0, 3] = -np.dot(s, posicion)
+        matriz[1, 3] = -np.dot(u, posicion)
+        matriz[2, 3] = np.dot(f, posicion)
+        return matriz
 
     @staticmethod
     def traslacion(x, y, z):
         m = np.eye(4, dtype=np.float32)
-        m[0, 3] = x
-        m[1, 3] = y
-        m[2, 3] = z
-        return m
-
-    @staticmethod
-    def escala(sx, sy, sz):
-        m = np.eye(4, dtype=np.float32)
-        m[0, 0] = sx
-        m[1, 1] = sy
-        m[2, 2] = sz
-        return m
-
-    @staticmethod
-    def rot_y(ang_deg):
-        a = math.radians(ang_deg)
-        c, s = math.cos(a), math.sin(a)
-        m = np.eye(4, dtype=np.float32)
-        m[0, 0] = c
-        m[0, 2] = s
-        m[2, 0] = -s
-        m[2, 2] = c
-        return m
-
-    @staticmethod
-    def rot_x(ang_deg):
-        a = math.radians(ang_deg)
-        c, s = math.cos(a), math.sin(a)
-        m = np.eye(4, dtype=np.float32)
-        m[1, 1] = c
-        m[1, 2] = -s
-        m[2, 1] = s
-        m[2, 2] = c
-        return m
-
-    @staticmethod
-    def rot_z(ang_deg):
-        a = math.radians(ang_deg)
-        c, s = math.cos(a), math.sin(a)
-        m = np.eye(4, dtype=np.float32)
-        m[0, 0] = c
-        m[0, 1] = -s
-        m[1, 0] = s
-        m[1, 1] = c
+        m[3, 0] = x
+        m[3, 1] = y
+        m[3, 2] = z
         return m
 
     @staticmethod

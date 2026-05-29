@@ -1,123 +1,53 @@
 import numpy as np
-from collections import deque
+import random
 
 class AnalizadorAgricola:
-    def __init__(self):
+    def __init__(self, config):
+        self.tipo_analisis = config.get('analisis', 1)
+        self.densidad_laser = config.get('densidad', 1000)
+
         self.cultivos = {
-            'CEBOLLA': {
-                'altura_ideal_min': -0.5,
-                'altura_ideal_max': 0.3,
-                'regularidad_min': 0.0,
-                'regularidad_max': 0.4,
-                'densidad_min': 0.3,
-                'rendimiento_kg_ha': 45000,
-                'dias_cosecha': 120,
-            },
-            'JITOMATE': {
-                'altura_ideal_min': -0.2,
-                'altura_ideal_max': 0.8,
-                'regularidad_min': 0.1,
-                'regularidad_max': 0.6,
-                'densidad_min': 0.2,
-                'rendimiento_kg_ha': 80000,
-                'dias_cosecha': 70,
-            },
-            'CILANTRO': {
-                'altura_ideal_min': -0.3,
-                'altura_ideal_max': 0.4,
-                'regularidad_min': 0.0,
-                'regularidad_max': 0.5,
-                'densidad_min': 0.25,
-                'rendimiento_kg_ha': 15000,
-                'dias_cosecha': 45,
-            },
-            'CHILES': {
-                'altura_ideal_min': 0.0,
-                'altura_ideal_max': 1.0,
-                'regularidad_min': 0.2,
-                'regularidad_max': 0.7,
-                'densidad_min': 0.2,
-                'rendimiento_kg_ha': 25000,
-                'dias_cosecha': 90,
-            },
-            'LECHUGA': {
-                'altura_ideal_min': -0.4,
-                'altura_ideal_max': 0.2,
-                'regularidad_min': 0.0,
-                'regularidad_max': 0.3,
-                'densidad_min': 0.35,
-                'rendimiento_kg_ha': 50000,
-                'dias_cosecha': 55,
-            },
+            'CEBOLLA (Bulbos)': {'h_min': 0.0, 'h_max': 0.6, 'rend_kg': 45000},
+            'JITOMATE (Hortaliza)': {'h_min': 0.2, 'h_max': 1.2, 'rend_kg': 80000},
+            'MAIZ (Grano)': {'h_min': 0.8, 'h_max': 2.5, 'rend_kg': 12000},
+            'TRIGO (Cereal)': {'h_min': 0.4, 'h_max': 1.0, 'rend_kg': 6000}
         }
-        self.historial_analisis = deque(maxlen=500)
 
-    def calcular_aptitud(self, altura_promedio, regularidad_terreno, densidad_puntos, area_m2):
+        self.pastos = {
+            'ALFALFA (Ganado Bovino)': {'h_min': 0.3, 'h_max': 0.9, 'rend_kg': 25000},
+            'BERMUDA (Ganado Equino)': {'h_min': 0.1, 'h_max': 0.4, 'rend_kg': 15000},
+            'AVENA FORRAJERA (Ovinos)': {'h_min': 0.4, 'h_max': 1.1, 'rend_kg': 18000},
+            'SORGO FORRAJERO (Porcinos)': {'h_min': 0.6, 'h_max': 1.8, 'rend_kg': 22000}
+        }
+
+    def calcular_aptitud(self, puntos_totales):
+        if len(puntos_totales) == 0:
+            return {}
+            
+        p_arr = np.array(puntos_totales)
+        altura_promedio = np.std(p_arr[:, 1])
         resultados = {}
-
-        for cultivo, params in self.cultivos.items():
-            altura_score = 0.0
-            if params['altura_ideal_min'] <= altura_promedio <= params['altura_ideal_max']:
-                altura_score = 1.0
+        catalogo = self.cultivos if self.tipo_analisis == 1 else self.pastos
+        area_estimada = 14400.0
+        margen_error = (500 - self.densidad_laser) / 500.0
+        
+        for nombre, p in catalogo.items():
+            desviacion = abs(altura_promedio - ((p['h_max'] + p['h_min']) / 2.0))
+            aptitud_real = max(0.0, 100.0 - (desviacion * 40.0))
+            
+            if margen_error > 0:
+                ruido = random.uniform(-margen_error * 20.0, margen_error * 20.0)
+                aptitud_final = np.clip(aptitud_real + ruido, 0.0, 100.0)
             else:
-                dist_min = abs(altura_promedio - params['altura_ideal_min'])
-                dist_max = abs(altura_promedio - params['altura_ideal_max'])
-                dist = min(dist_min, dist_max)
-                altura_score = max(0.0, 1.0 - (dist * 0.5))
-
-            regularidad_score = 0.0
-            if params['regularidad_min'] <= regularidad_terreno <= params['regularidad_max']:
-                regularidad_score = 1.0
-            else:
-                if regularidad_terreno < params['regularidad_min']:
-                    regularidad_score = max(0.0, 1.0 - ((params['regularidad_min'] - regularidad_terreno) * 2.0))
-                else:
-                    regularidad_score = max(0.0, 1.0 - ((regularidad_terreno - params['regularidad_max']) * 2.0))
-
-            densidad_score = 0.0
-            if densidad_puntos >= params['densidad_min']:
-                densidad_score = min(1.0, densidad_puntos / 0.8)
-            else:
-                densidad_score = (densidad_puntos / params['densidad_min']) * 0.7
-
-            aptitud_final = (altura_score * 0.35) + (regularidad_score * 0.35) + (densidad_score * 0.30)
-            aptitud_porcentaje = int(aptitud_final * 100)
-
-            area_ha = area_m2 / 10000.0
-            rendimiento_estimado = (aptitud_final * params['rendimiento_kg_ha'] * area_ha)
-
-            resultados[cultivo] = {
-                'aptitud': aptitud_porcentaje,
-                'rendimiento_kg': int(rendimiento_estimado),
-                'dias_cosecha': params['dias_cosecha'],
-                'altura_score': altura_score,
-                'regularidad_score': regularidad_score,
-                'densidad_score': densidad_score,
+                aptitud_final = aptitud_real
+                
+            rendimiento = int((aptitud_final / 100.0) * p['rend_kg'] * (area_estimada / 10000.0))
+            confianza = 100 - int(margen_error * 80)
+            
+            resultados[nombre] = {
+                'aptitud': round(aptitud_final, 1),
+                'rendimiento_kg': rendimiento,
+                'confianza': confianza
             }
-
-        return resultados
-
-    def evaluar_puntos_lidar(self, puntos_lidar, area_m2):
-        if len(puntos_lidar) == 0:
-            return None, 0.0, 0.0, 0.0
-
-        puntos_array = np.array(puntos_lidar)
-        altura_promedio = np.mean(puntos_array[:, 1])
-        altura_std = np.std(puntos_array[:, 1])
-        regularidad_terreno = altura_std
-
-        densidad_puntos = min(len(puntos_lidar) / 10000.0, 1.0)
-
-        resultados = self.calcular_aptitud(altura_promedio, regularidad_terreno, densidad_puntos, area_m2)
-
-        self.historial_analisis.append({
-            'timestamp': len(self.historial_analisis),
-            'altura_promedio': altura_promedio,
-            'regularidad': regularidad_terreno,
-            'densidad': densidad_puntos,
-            'resultados': resultados
-        })
-
-        mejor_cultivo = max(resultados.items(), key=lambda x: x[1]['aptitud'])
-        return resultados, altura_promedio, regularidad_terreno, densidad_puntos
-
+            
+        return dict(sorted(resultados.items(), key=lambda item: item[1]['aptitud'], reverse=True))
